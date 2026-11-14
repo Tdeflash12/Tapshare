@@ -1,0 +1,8 @@
+{
+  "name": "QuickShare",
+  "description": "Share Anything. Anywhere. Instantly. Upload files or share text online with instant public links, QR codes, and Gmail sharing—no sign-up required.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
