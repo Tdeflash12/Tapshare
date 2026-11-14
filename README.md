@@ -1,8 +1,18 @@
-# TapShare — Online File & Text Sharing Platform
+# QuickShare (TapShare) — Online File & Text Sharing Platform
 
 **Tagline:** Share Anything. Anywhere. Instantly.
 
-TapShare is a simple, full-stack file and text sharing application built with React, TypeScript, Tailwind CSS, and Node.js + Express. Anyone can upload files or share text and get an instant public URL, QR code, and Gmail Compose link without creating an account.
+QuickShare is a full-stack file and text sharing application built with React, TypeScript, Tailwind CSS, and Node.js + Express. Anyone can upload files or share text and get an instant public URL, QR code, and email-sharing options without creating an account.
+
+## Features
+
+- Share text, code, or Markdown content.
+- Upload one or more files in a share bundle.
+- Generate short-lived five-digit share codes and public URLs.
+- Preview supported images, PDFs, and text-based files.
+- Generate QR codes and optional short links.
+- Send a share through SMTP or Resend, with a default mail-app fallback.
+- Automatically remove expired shares from local storage.
 
 ## Project Structure
 
@@ -57,19 +67,64 @@ TapShare is a simple, full-stack file and text sharing application built with Re
    ```bash
    npm install
    ```
-2. Start the development server (`http://localhost:3000`):
+
+   If npm reports a peer-dependency conflict between Vite and esbuild, use:
+   ```bash
+   npm install --legacy-peer-deps
+   ```
+
+2. Create a `.env` file when server-side email or custom storage settings are needed:
+   ```bash
+   cp .env.example .env
+   ```
+
+   The application works without email credentials; the email form then offers a `mailto:` fallback. For direct delivery, configure either SMTP:
+   ```env
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USER=your-email@example.com
+   SMTP_PASS=your-app-password
+   SMTP_FROM="TapShare <your-email@example.com>"
+   ```
+   or Resend:
+   ```env
+   RESEND_API_KEY=your-resend-api-key
+   ```
+
+3. Start the development server (`http://localhost:3000`):
    ```bash
    npm run dev
    ```
-3. Run unit tests:
+4. Run unit tests:
    ```bash
    npx --yes tsx --test src/shared/validation.test.ts src/shared/formatters.test.ts src/shared/dailyQuotes.test.ts server/services/emailService.test.ts server/services/shortenerService.test.ts
    ```
-4. Build and run in production:
+5. Build and run in production:
    ```bash
    npm run build
    NODE_ENV=production npm start
    ```
+
+## Available scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the Express and Vite development server |
+| `npm run build` | Build the frontend for production |
+| `npm start` | Start the production Express server |
+| `npm run preview` | Preview the Vite production build |
+| `npm run lint` | Run the TypeScript compiler without emitting files |
+| `npm run clean` | Remove generated production output |
+
+## API overview
+
+- `GET /api/health` - Check server health.
+- `GET /api/email/status` - Check whether SMTP or Resend is configured.
+- `POST /api/shares/text` - Create a text share.
+- `POST /api/shares/files` - Create a file share using multipart form data.
+- `GET /api/shares/:id` - Read a share.
+- `GET /api/shares/:id/qr` - Generate a share QR code.
+- `POST /api/shares/:id/email` - Send a share by email.
 
 ## Deploy to Vercel
 
