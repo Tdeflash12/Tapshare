@@ -17,9 +17,9 @@ import {
   createFileShareRecord,
   createTextShareRecord,
   deleteShareWithToken,
-  getStoredFilePath,
   incrementShareDownload,
   incrementShareView,
+  readStoredFile,
   readShareRecord,
   setShareShortUrl,
   toPublicShare,
@@ -249,19 +249,22 @@ export async function createSharesRouter(): Promise<Router> {
         return;
       }
 
-      const filePath = getStoredFilePath(id, file.storedName);
+      const fileBuffer = await readStoredFile(id, file.storedName, file.blobUrl);
+      if (!fileBuffer) {
+        res.status(404).json({ error: 'File not found or expired.' });
+        return;
+      }
 
       if (file.previewCategory === 'text') {
-        const buffer = await fs.readFile(filePath);
         const maxPreviewBytes = 200 * 1024;
-        const truncated = buffer.byteLength > maxPreviewBytes;
-        const text = buffer.subarray(0, maxPreviewBytes).toString('utf8');
+        const truncated = fileBuffer.byteLength > maxPreviewBytes;
+        const text = fileBuffer.subarray(0, maxPreviewBytes).toString('utf8');
         res.json({ kind: 'text', text, truncated });
         return;
       }
 
       if (file.previewCategory === 'docx') {
-        const extracted = await mammoth.extractRawText({ path: filePath });
+        const extracted = await mammoth.extractRawText({ buffer: fileBuffer });
         const rawText = extracted.value || '';
         const maxChars = 100_000;
         const truncated = rawText.length > maxChars;
@@ -301,7 +304,11 @@ export async function createSharesRouter(): Promise<Router> {
         return;
       }
 
-      const filePath = getStoredFilePath(id, file.storedName);
+      const fileBuffer = await readStoredFile(id, file.storedName, file.blobUrl);
+      if (!fileBuffer) {
+        res.status(404).json({ error: 'File not found or expired.' });
+        return;
+      }
       const safeHeaderName = sanitizeFilename(file.originalName).replace(/"/g, '');
       res.setHeader('Content-Type', safeMime);
       res.setHeader('Content-Disposition', `inline; filename="${safeHeaderName}"`);
@@ -311,11 +318,7 @@ export async function createSharesRouter(): Promise<Router> {
           ? "default-src 'self'; object-src 'self'; frame-ancestors 'self'"
           : "default-src 'none'; sandbox",
       );
-      res.sendFile(filePath, (err) => {
-        if (err && !res.headersSent) {
-          res.status(404).json({ error: 'File not found or expired.' });
-        }
-      });
+      res.send(fileBuffer);
     } catch {
       res.status(404).json({ error: 'File not found.' });
     }
@@ -336,12 +339,17 @@ export async function createSharesRouter(): Promise<Router> {
         return;
       }
 
-      const filePath = getStoredFilePath(id, file.storedName);
-      res.download(filePath, file.originalName, (err) => {
-        if (err && !res.headersSent) {
-          res.status(404).json({ error: 'File download unavailable.' });
-        }
-      });
+      const fileBuffer = await readStoredFile(id, file.storedName, file.blobUrl);
+      if (!fileBuffer) {
+        res.status(404).json({ error: 'File download unavailable.' });
+        return;
+      }
+      res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${sanitizeFilename(file.originalName).replace(/"/g, '')}"`,
+      );
+      res.send(fileBuffer);
     } catch {
       res.status(404).json({ error: 'File download unavailable.' });
     }

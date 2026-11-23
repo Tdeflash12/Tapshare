@@ -103,6 +103,24 @@ export function getStoredFilePath(shareId: string, storedName: string): string {
   return path.join(getUploadsDir(), shareId, safeStored);
 }
 
+export async function readStoredFile(
+  shareId: string,
+  storedName: string,
+  blobUrl?: string,
+): Promise<Buffer | null> {
+  if (USE_BLOB_STORAGE) {
+    if (!blobUrl) return null;
+    const result = await get(blobUrl, { access: 'private', useCache: false });
+    if (!result || result.statusCode !== 200) return null;
+    return Buffer.from(await new Response(result.stream).arrayBuffer());
+  }
+  try {
+    return await fs.readFile(getStoredFilePath(shareId, storedName));
+  } catch {
+    return null;
+  }
+}
+
 export function toPublicShare(record: StoredShareRecord): ShareRecordPublic {
   return {
     id: record.id,
