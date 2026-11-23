@@ -3,7 +3,8 @@ export const MAX_BUNDLE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB total per shar
 export const MAX_FILES_PER_SHARE = 10;
 export const MAX_TEXT_LENGTH = 500_000; // 500k characters (~500 KB - 1 MB)
 export const DEFAULT_EXPIRY_DAYS = 7;
-export const ALLOWED_EXPIRY_DAYS = [1, 7, 14, 30] as const;
+export const ALLOWED_EXPIRY_DAYS = [1, 3, 7, 30] as const;
+export const EXPIRY_MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export const ALLOWED_EXTENSIONS = new Set([
   '.txt',
@@ -207,6 +208,11 @@ export function normalizeExpiryDays(days: unknown): number {
     return num;
   }
   return DEFAULT_EXPIRY_DAYS;
+}
+
+export function calculateExpiresAt(createdAt: number, expiryDays: unknown): number {
+  const days = normalizeExpiryDays(expiryDays);
+  return createdAt + days * EXPIRY_MS_PER_DAY;
 }
 
 export function isValidEmail(email: string): boolean {

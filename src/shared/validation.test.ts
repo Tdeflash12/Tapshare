@@ -6,6 +6,7 @@ import {
   validateTextShare,
   sanitizeFilename,
   normalizeExpiryDays,
+  calculateExpiresAt,
   isValidEmail,
   extractShareCode,
   MAX_FILE_SIZE_BYTES,
@@ -71,11 +72,21 @@ test('validateTextShare validates non-empty text and title length', () => {
 
 test('normalizeExpiryDays defaults to 7 days for unsupported inputs', () => {
   assert.equal(normalizeExpiryDays(1), 1);
+  assert.equal(normalizeExpiryDays(3), 3);
   assert.equal(normalizeExpiryDays(7), 7);
-  assert.equal(normalizeExpiryDays('14'), 14);
   assert.equal(normalizeExpiryDays(30), 30);
+  assert.equal(normalizeExpiryDays('14'), 7);
   assert.equal(normalizeExpiryDays(999), 7);
   assert.equal(normalizeExpiryDays(undefined), 7);
+});
+
+test('calculateExpiresAt uses exact 24-hour durations for all supported options', () => {
+  const createdAt = 1_700_000_000_000;
+  const dayMs = 24 * 60 * 60 * 1000;
+  assert.equal(calculateExpiresAt(createdAt, 1) - createdAt, dayMs);
+  assert.equal(calculateExpiresAt(createdAt, 3) - createdAt, 3 * dayMs);
+  assert.equal(calculateExpiresAt(createdAt, 7) - createdAt, 7 * dayMs);
+  assert.equal(calculateExpiresAt(createdAt, 30) - createdAt, 30 * dayMs);
 });
 
 test('isValidEmail validates optional recipient addresses', () => {

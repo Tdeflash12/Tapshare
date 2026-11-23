@@ -230,18 +230,18 @@ export function UploadWorkspace({
       role="dialog"
       aria-modal="true"
       aria-labelledby="workspace-dialog-title"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-[#0B0F1A]/75 p-4 backdrop-blur-xs overflow-y-auto"
+      className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-[#0B0F1A]/75 p-2 backdrop-blur-xs sm:p-4"
     >
-      <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-[#1F263B] p-5 text-slate-100 shadow-2xl sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-          <div className="flex items-center gap-3">
+      <div className="my-auto max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/15 bg-[#1F263B] p-4 text-slate-100 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-6">
+        <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="w-full sm:w-auto">
             <h2 id="workspace-dialog-title" className="sr-only">
               Create TapShare
             </h2>
             <div
               role="tablist"
               aria-label="Share type"
-              className="inline-flex items-center gap-1 rounded-lg bg-[#141928] p-1"
+              className="grid grid-cols-2 gap-1 rounded-lg bg-[#141928] p-1 sm:inline-flex"
             >
               <button
                 type="button"
@@ -280,8 +280,8 @@ export function UploadWorkspace({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
+          <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start sm:gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
               <label htmlFor="share-expiry" className="text-xs text-slate-400 whitespace-nowrap">
                 Expires in
               </label>
@@ -289,7 +289,7 @@ export function UploadWorkspace({
                 id="share-expiry"
                 value={expiryDays}
                 onChange={(e) => setExpiryDays(Number(e.target.value))}
-                className="rounded-lg border border-white/15 bg-[#151A2A] px-2.5 py-1.5 text-xs text-slate-100 focus:border-blue-400 focus:outline-none"
+                className="min-w-0 flex-1 rounded-lg border border-white/15 bg-[#151A2A] px-2.5 py-2 text-xs text-slate-100 focus:border-blue-400 focus:outline-none sm:flex-none"
               >
                 {ALLOWED_EXPIRY_DAYS.map((day) => (
                   <option key={day} value={day}>
@@ -541,7 +541,7 @@ export function UploadWorkspace({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-60 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-60 transition-colors whitespace-nowrap shrink-0 cursor-pointer sm:w-auto"
             >
               <Link2 className="h-4 w-4" aria-hidden="true" />
               {isSubmitting ? 'Generating Link...' : 'Generate Share Link'}

@@ -4,8 +4,8 @@ import path from 'node:path';
 import type { SharedFileItem, ShareRecordPublic, ShareType } from '../../src/shared/types.ts';
 import { getPreviewCategory } from '../../src/shared/formatters.ts';
 import {
+  calculateExpiresAt,
   getFileExtension,
-  normalizeExpiryDays,
   sanitizeFilename,
 } from '../../src/shared/validation.ts';
 
@@ -132,8 +132,7 @@ export async function createTextShareRecord(params: {
   const id = await generateUniqueShareId();
   const deleteToken = generateDeleteToken();
   const now = Date.now();
-  const days = normalizeExpiryDays(params.expiryDays);
-  const expiresAt = now + days * 24 * 60 * 60 * 1000;
+  const expiresAt = calculateExpiresAt(now, params.expiryDays);
   const byteSize = Buffer.byteLength(params.textContent, 'utf8');
 
   const record: StoredShareRecord = {
@@ -171,8 +170,7 @@ export async function createFileShareRecord(params: {
   const id = await generateUniqueShareId();
   const deleteToken = generateDeleteToken();
   const now = Date.now();
-  const days = normalizeExpiryDays(params.expiryDays);
-  const expiresAt = now + days * 24 * 60 * 60 * 1000;
+  const expiresAt = calculateExpiresAt(now, params.expiryDays);
 
   const shareUploadDir = path.join(getUploadsDir(), id);
   await fs.mkdir(shareUploadDir, { recursive: true });
@@ -232,7 +230,7 @@ export async function readShareRecord(id: string): Promise<StoredShareRecord | n
     const metaPath = shareMetaPath(id);
     const raw = await fs.readFile(metaPath, 'utf8');
     const parsed = JSON.parse(raw) as StoredShareRecord;
-    if (Date.now() > parsed.expiresAt) {
+    if (Date.now() >= parsed.expiresAt) {
       await purgeShareRecord(id);
       return null;
     }
@@ -323,7 +321,7 @@ export async function cleanupExpiredShares(): Promise<number> {
       try {
         const raw = await fs.readFile(path.join(dir, entry), 'utf8');
         const parsed = JSON.parse(raw) as StoredShareRecord;
-        if (Date.now() > parsed.expiresAt) {
+        if (Date.now() >= parsed.expiresAt) {
           await purgeShareRecord(id);
           removed += 1;
         }
