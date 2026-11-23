@@ -113,10 +113,14 @@ export const STUDENT_QUOTES: readonly StudentQuote[] = [
 ];
 
 export function getDayOfYearIndex(date: Date = new Date()): number {
-  const start = new Date(date.getFullYear(), 0, 0);
-  const diff = date.getTime() - start.getTime();
+  const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+  const current = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+  );
   const oneDay = 1000 * 60 * 60 * 24;
-  return Math.max(0, Math.floor(diff / oneDay));
+  return Math.max(0, Math.floor((current - start) / oneDay));
 }
 
 export function getDailyStudentQuoteIndex(date: Date = new Date()): number {

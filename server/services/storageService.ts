@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { del, get, put } from '@vercel/blob';
 import type { SharedFileItem, ShareRecordPublic, ShareType } from '../../src/shared/types.ts';
 import { getPreviewCategory } from '../../src/shared/formatters.ts';
 import {
@@ -11,6 +12,7 @@ import {
 
 export interface StoredFileEntry extends SharedFileItem {
   storedName: string;
+  blobUrl?: string;
 }
 
 export interface StoredShareRecord {
@@ -33,6 +35,8 @@ const DEFAULT_DATA_DIR = process.env.VERCEL
   ? path.join('/tmp', 'tapshare-data')
   : path.resolve(process.cwd(), 'data');
 
+const USE_BLOB_STORAGE = Boolean(process.env.VERCEL && process.env.BLOB_READ_WRITE_TOKEN);
+
 export function getDataDir(): string {
   return process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : DEFAULT_DATA_DIR;
 }
@@ -46,6 +50,7 @@ function getUploadsDir(): string {
 }
 
 export async function ensureStorageDirs(): Promise<void> {
+  if (USE_BLOB_STORAGE) return;
   await fs.mkdir(getSharesDir(), { recursive: true });
   await fs.mkdir(getUploadsDir(), { recursive: true });
 }
@@ -58,10 +63,15 @@ async function generateUniqueShareId(): Promise<string> {
   await ensureStorageDirs();
   for (let attempt = 0; attempt < 50; attempt += 1) {
     const candidate = generateShareId();
-    try {
-      await fs.access(shareMetaPath(candidate));
-    } catch {
-      return candidate;
+    if (USE_BLOB_STORAGE) {
+      const existing = await readShareRecord(candidate);
+      if (!existing) return candidate;
+    } else {
+      try {
+        await fs.access(shareMetaPath(candidate));
+      } catch {
+        return candidate;
+      }
     }
   }
   throw new Error('Unable to allocate a unique 5-digit share code. Please try again.');
@@ -83,6 +93,9 @@ function shareMetaPath(id: string): string {
 }
 
 export function getStoredFilePath(shareId: string, storedName: string): string {
+  if (USE_BLOB_STORAGE) {
+    throw new Error('Blob-backed files must be read through the storage service');
+  }
   if (!/^[A-Za-z0-9_-]{5,32}$/.test(shareId)) {
     throw new Error('Invalid share ID');
   }
@@ -116,6 +129,16 @@ export function toPublicShare(record: StoredShareRecord): ShareRecordPublic {
 }
 
 async function writeShareAtomic(record: StoredShareRecord): Promise<void> {
+  if (USE_BLOB_STORAGE) {
+    await put(`tapshare/shares/${record.id}.json`, JSON.stringify(record, null, 2), {
+      access: 'private',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: 'application/json; charset=utf-8',
+      ttlDays: Math.ceil((record.expiresAt - Date.now()) / (24 * 60 * 60 * 1000)),
+    });
+    return;
+  }
   await ensureStorageDirs();
   const target = shareMetaPath(record.id);
   const tmp = `${target}.${crypto.randomBytes(4).toString('hex')}.tmp`;
@@ -173,7 +196,7 @@ export async function createFileShareRecord(params: {
   const expiresAt = calculateExpiresAt(now, params.expiryDays);
 
   const shareUploadDir = path.join(getUploadsDir(), id);
-  await fs.mkdir(shareUploadDir, { recursive: true });
+  if (!USE_BLOB_STORAGE) await fs.mkdir(shareUploadDir, { recursive: true });
 
   const storedFiles: StoredFileEntry[] = [];
   let totalSize = 0;
@@ -185,10 +208,24 @@ export async function createFileShareRecord(params: {
     const storedName = `${fileId}_${cleanName}`;
     const destPath = path.join(shareUploadDir, storedName);
 
-    await fs.rename(file.tempPath, destPath).catch(async () => {
-      await fs.copyFile(file.tempPath, destPath);
+    let blobUrl: string | undefined;
+    if (USE_BLOB_STORAGE) {
+      const body = await fs.readFile(file.tempPath);
+      const blob = await put(`tapshare/uploads/${id}/${storedName}`, body, {
+        access: 'private',
+        addRandomSuffix: false,
+        allowOverwrite: false,
+        contentType: file.mimeType || 'application/octet-stream',
+        ttlDays: Math.max(1, Math.ceil((expiresAt - now) / (24 * 60 * 60 * 1000))),
+      });
+      blobUrl = blob.url;
       await fs.unlink(file.tempPath).catch(() => undefined);
-    });
+    } else {
+      await fs.rename(file.tempPath, destPath).catch(async () => {
+        await fs.copyFile(file.tempPath, destPath);
+        await fs.unlink(file.tempPath).catch(() => undefined);
+      });
+    }
 
     totalSize += file.size;
     storedFiles.push({
@@ -199,6 +236,7 @@ export async function createFileShareRecord(params: {
       mimeType: file.mimeType || 'application/octet-stream',
       extension: ext,
       previewCategory: getPreviewCategory(ext, file.mimeType || ''),
+      blobUrl,
       downloadCount: 0,
     });
   }
@@ -226,6 +264,21 @@ export async function createFileShareRecord(params: {
 }
 
 export async function readShareRecord(id: string): Promise<StoredShareRecord | null> {
+  if (USE_BLOB_STORAGE) {
+    try {
+      const result = await get(`tapshare/shares/${id}.json`, { access: 'private', useCache: false });
+      if (!result || result.statusCode !== 200) return null;
+      const raw = await new Response(result.stream).text();
+      const parsed = JSON.parse(raw) as StoredShareRecord;
+      if (Date.now() >= parsed.expiresAt) {
+        await purgeShareRecord(id);
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
   try {
     const metaPath = shareMetaPath(id);
     const raw = await fs.readFile(metaPath, 'utf8');
@@ -276,7 +329,27 @@ export async function setShareShortUrl(
   return toPublicShare(record);
 }
 
+async function readShareRecordWithoutExpiryCheck(id: string): Promise<StoredShareRecord | null> {
+  if (!USE_BLOB_STORAGE) return readShareRecord(id);
+  try {
+    const result = await get(`tapshare/shares/${id}.json`, { access: 'private', useCache: false });
+    if (!result || result.statusCode !== 200) return null;
+    return JSON.parse(await new Response(result.stream).text()) as StoredShareRecord;
+  } catch {
+    return null;
+  }
+}
+
 export async function purgeShareRecord(id: string): Promise<void> {
+  if (USE_BLOB_STORAGE) {
+    const record = await readShareRecordWithoutExpiryCheck(id);
+    const urls = [
+      `tapshare/shares/${id}.json`,
+      ...(record?.files.map((file) => file.blobUrl).filter((url): url is string => Boolean(url)) ?? []),
+    ];
+    await del(urls).catch(() => undefined);
+    return;
+  }
   try {
     await fs.unlink(shareMetaPath(id));
   } catch {
